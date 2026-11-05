@@ -1,0 +1,330 @@
+
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fire Hydrants</title>
+
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #20252b;
+    color: white;
+}
+
+header {
+    background: #b22222;
+    padding: 18px;
+    text-align: center;
+}
+
+h1 { margin: 0; }
+
+.controls {
+    text-align: center;
+    padding: 12px;
+}
+
+button {
+    background: #b22222;
+    color: white;
+    border: none;
+    padding: 11px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin: 4px;
+}
+
+button:hover { background: #8b0000; }
+
+#map {
+    width: 100%;
+    height: 65vh;
+    min-height: 400px;
+}
+
+.hydrant-details {
+    color: #222;
+    line-height: 1.6;
+    min-width: 190px;
+}
+
+.hydrant-details button {
+    color: white;
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>🚒 FIRE HYDRANTS</h1>
+    <p>Регистър на пожарните хидранти</p>
+</header>
+
+<div class="controls">
+    <button onclick="findMyLocation()">
+        📍 Моето местоположение
+    </button>
+
+    <button onclick="showAllHydrants()">
+        🔵 Всички хидранти
+    </button>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+// КАРТА
+var map = L.map('map').setView([42.7339, 25.4858], 7);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+}).addTo(map);
+
+
+// СИНЯ ИКОНКА НА ХИДРАНТ
+var hydrantIcon = L.divIcon({
+    className: 'hydrant-icon',
+    html: `
+    <svg width="30" height="36" viewBox="0 0 60 72"
+    xmlns="http://www.w3.org/2000/svg">
+        <path d="M17 18 H43 V55 H17 Z"
+        fill="#0879e8" stroke="#064b91" stroke-width="3"/>
+        <path d="M12 18 H48 V27 H12 Z"
+        fill="#0879e8" stroke="#064b91" stroke-width="3"/>
+        <path d="M21 9 H39 V18 H21 Z"
+        fill="#0879e8" stroke="#064b91" stroke-width="3"/>
+        <path d="M25 3 H35 V9 H25 Z"
+        fill="#0879e8" stroke="#064b91" stroke-width="2"/>
+        <path d="M17 29 H8 V39 H17"
+        fill="#0879e8" stroke="#064b91" stroke-width="3"/>
+        <path d="M43 29 H52 V39 H43"
+        fill="#0879e8" stroke="#064b91" stroke-width="3"/>
+        <path d="M12 55 H48 V62 H12 Z"
+        fill="#0879e8" stroke="#064b91" stroke-width="3"/>
+    </svg>`,
+    iconSize: [30, 36],
+    iconAnchor: [15, 36]
+});
+
+
+// ЧЕРВЕНА ИКОНКА НА ЧОВЕЧЕ
+var personIcon = L.divIcon({
+    className: 'person-icon',
+    html: '<span style="color:red;font-size:25px;">🧍</span>',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
+});
+
+
+// СЛОЙ ЗА ХИДРАНТИТЕ
+var hydrantLayer = L.layerGroup().addTo(map);
+
+
+// ЗАРЕЖДАНЕ НА ДАННИТЕ
+var hydrants = JSON.parse(localStorage.getItem('hydrants')) || [];
+
+
+// ЗАПАЗВАНЕ
+function saveHydrants() {
+    localStorage.setItem('hydrants', JSON.stringify(hydrants));
+}
+
+
+// ЗАЩИТА НА ТЕКСТА В ПОПЪЛВАНИТЕ ПОЛЕТА
+function safeText(value) {
+    return String(value || '').replace(/[&<>"']/g, function(char) {
+        return {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[char];
+    });
+}
+
+
+// ДОБАВЯНЕ НА ХИДРАНТ
+function addHydrant(lat, lng) {
+
+    var name = prompt("Номер или обозначение на хидранта:");
+    if (!name || !name.trim()) return;
+
+    var address = prompt("Адрес или местоположение:") || "";
+    var diameter = prompt("Диаметър (например DN80, DN100, DN150):") || "";
+    var pressure = prompt("Налягане (bar):") || "";
+    var flow = prompt("Дебит (l/s):") || "";
+    var status = prompt("Състояние (изправен / неизправен / неизвестен):") || "Неизвестно";
+    var date = prompt("Дата на последна проверка:") || "";
+
+    hydrants.push({
+        id: Date.now(),
+        name: name.trim(),
+        address: address,
+        diameter: diameter,
+        pressure: pressure,
+        flow: flow,
+        status: status,
+        date: date,
+        lat: lat,
+        lng: lng
+    });
+
+    saveHydrants();
+    showHydrants();
+}
+
+
+// ИНФОРМАЦИЯ ЗА ХИДРАНТА
+function hydrantPopup(h, index) {
+
+    return `
+    <div class="hydrant-details">
+        <b>🚒 ХИДРАНТ: ${safeText(h.name)}</b>
+        <hr>
+        <b>Адрес:</b> ${safeText(h.address)}<br>
+        <b>Диаметър:</b> ${safeText(h.diameter)}<br>
+        <b>Налягане:</b> ${safeText(h.pressure)} bar<br>
+        <b>Дебит:</b> ${safeText(h.flow)} l/s<br>
+        <b>Състояние:</b> ${safeText(h.status)}<br>
+        <b>Последна проверка:</b> ${safeText(h.date)}<br>
+        <b>GPS:</b> ${h.lat.toFixed(6)}, ${h.lng.toFixed(6)}
+        <hr>
+        <button onclick="editHydrant(${index})">✏️ Редактирай</button>
+        <button onclick="deleteHydrant(${index})">🗑️ Изтрий</button>
+    </div>`;
+}
+
+
+// ПОКАЗВАНЕ НА ХИДРАНТИТЕ
+function showHydrants() {
+
+    hydrantLayer.clearLayers();
+
+    hydrants.forEach(function(h, index) {
+
+        var marker = L.marker(
+            [h.lat, h.lng],
+            { icon: hydrantIcon }
+        ).addTo(hydrantLayer);
+
+        marker.bindPopup(hydrantPopup(h, index));
+    });
+}
+
+
+// РЕДАКТИРАНЕ
+function editHydrant(index) {
+
+    var h = hydrants[index];
+
+    if (!h) return;
+
+    var name = prompt("Номер на хидранта:", h.name);
+    if (!name || !name.trim()) return;
+
+    h.name = name.trim();
+    h.address = prompt("Адрес:", h.address || "") || "";
+    h.diameter = prompt("Диаметър:", h.diameter || "") || "";
+    h.pressure = prompt("Налягане (bar):", h.pressure || "") || "";
+    h.flow = prompt("Дебит (l/s):", h.flow || "") || "";
+    h.status = prompt("Състояние:", h.status || "") || "";
+    h.date = prompt("Дата на проверка:", h.date || "") || "";
+
+    saveHydrants();
+    showHydrants();
+}
+
+
+// ИЗТРИВАНЕ
+function deleteHydrant(index) {
+
+    if (confirm("Сигурна ли си, че искаш да изтриеш този хидрант?")) {
+
+        hydrants.splice(index, 1);
+
+        saveHydrants();
+        showHydrants();
+    }
+}
+
+
+// ПОКАЗВАНЕ НА ВСИЧКИ ХИДРАНТИ
+function showAllHydrants() {
+
+    if (hydrants.length === 0) {
+        alert("Няма добавени хидранти.");
+        return;
+    }
+
+    var group = L.featureGroup();
+
+    hydrants.forEach(function(h) {
+        group.addLayer(
+            L.marker([h.lat, h.lng])
+        );
+    });
+
+    map.fitBounds(group.getBounds(), { padding: [30, 30] });
+}
+
+
+// GPS ПОЗИЦИОНИРАНЕ
+function findMyLocation() {
+
+    if (!navigator.geolocation) {
+        alert("Браузърът не поддържа GPS!");
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+
+        function(position) {
+
+            var lat = position.coords.latitude;
+            var lng = position.coords.longitude;
+
+            map.setView([lat, lng], 17);
+
+            L.marker([lat, lng], {
+                icon: personIcon
+            })
+            .addTo(map)
+            .bindPopup("📍 Твоето местоположение")
+            .openPopup();
+        },
+
+        function() {
+            alert("Неуспешно GPS позициониране. Провери разрешенията.");
+        }
+    );
+}
+
+
+// КЛИК ВЪРХУ КАРТАТА = ДОБАВЯНЕ
+map.on('click', function(e) {
+    addHydrant(e.latlng.lat, e.latlng.lng);
+});
+
+
+// ЗАРЕЖДАМЕ ВСИЧКИ ЗАПИСИ
+showHydrants();
+
+</script>
+
+</body>
+</html>
