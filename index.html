@@ -463,13 +463,19 @@ loadHydrants();
 
 </script>
 <script>
+
 if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./service-worker.js")
-            .then(() => console.log("Fire Hydrants App is ready!"))
-            .catch(error => console.error("Service Worker error:", error));
-    });
+    navigator.serviceWorker.register("./service-worker.js")
+        .then(registration => {
+            console.log("Service Worker registered:", registration.scope);
+        })
+        .catch(error => {
+            console.error("Service Worker registration failed:", error);
+        });
+} else {
+    console.error("Service Workers are not supported.");
 }
 </script>
+
 </body>
 </html>
