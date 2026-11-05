@@ -9,6 +9,8 @@
 <link rel="stylesheet"
 href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
 * { box-sizing: border-box; }
 
@@ -59,10 +61,7 @@ button:hover { background: #8b0000; }
 .hydrant-details button {
     color: white;
 }
-
 </style>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
@@ -88,16 +87,24 @@ button:hover { background: #8b0000; }
 
 <script>
 
+// ======================================
 // SUPABASE ВРЪЗКА
-const SUPABASE_URL = 'https://naafsfscdxsvbooiecus.supabase.co/rest/v1/';
+// ======================================
+
+const SUPABASE_URL = 'https://naafsfscdxsvbooiecus.supabase.co';
+
 const SUPABASE_KEY = 'sb_publishable_k-TpCRFJnVdJcqNnVnMQrQ_1Rv61dnz';
 
-const supabase = window.supabase.createClient(
+const supabaseClient = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_KEY
 );
 
+
+// ======================================
 // КАРТА
+// ======================================
+
 var map = L.map('map').setView([42.7339, 25.4858], 7);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -106,7 +113,10 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 
+// ======================================
 // СИНЯ ИКОНКА НА ХИДРАНТ
+// ======================================
+
 var hydrantIcon = L.divIcon({
     className: 'hydrant-icon',
     html: `
@@ -132,7 +142,10 @@ var hydrantIcon = L.divIcon({
 });
 
 
+// ======================================
 // ЧЕРВЕНА ИКОНКА НА ЧОВЕЧЕ
+// ======================================
+
 var personIcon = L.divIcon({
     className: 'person-icon',
     html: '<span style="color:red;font-size:25px;">🧍</span>',
@@ -141,20 +154,28 @@ var personIcon = L.divIcon({
 });
 
 
+// ======================================
 // СЛОЙ ЗА ХИДРАНТИТЕ
+// ======================================
+
 var hydrantLayer = L.layerGroup().addTo(map);
 
 
-// ЗАРЕЖДАНЕ НА ДАННИТЕ
-var hydrants = JSON.parse(localStorage.getItem('hydrants')) || [];
+// ======================================
+// ДАННИ ОТ SUPABASE
+// ======================================
 
-
-// ЗАРЕЖДАНЕ НА ДАННИТЕ ОТ SUPABASE
 var hydrants = [];
 
+
+// ======================================
+// ЗАРЕЖДАНЕ НА ХИДРАНТИТЕ
+// ======================================
+
 async function loadHydrants() {
-    const { data, error } = await supabase
-        .from('hydrants')
+
+    const { data, error } = await supabaseClient
+        .from('Hydrants')
         .select('*');
 
     if (error) {
@@ -182,7 +203,10 @@ async function loadHydrants() {
 }
 
 
-// ЗАЩИТА НА ТЕКСТА В ПОПЪЛВАНИТЕ ПОЛЕТА
+// ======================================
+// ЗАЩИТА НА ТЕКСТА
+// ======================================
+
 function safeText(value) {
     return String(value || '').replace(/[&<>"']/g, function(char) {
         return {
@@ -196,7 +220,10 @@ function safeText(value) {
 }
 
 
+// ======================================
 // ДОБАВЯНЕ НА ХИДРАНТ
+// ======================================
+
 async function addHydrant(lat, lng) {
 
     var name = prompt("Номер или обозначение на хидранта:");
@@ -209,8 +236,8 @@ async function addHydrant(lat, lng) {
     var status = prompt("Състояние (изправен / неизправен / неизвестен):") || "Неизвестно";
     var date = prompt("Дата на последна проверка:") || "";
 
-    const { error } = await supabase
-        .from('hydrants')
+    const { error } = await supabaseClient
+        .from('Hydrants')
         .insert([{
             name: name.trim(),
             address: address,
@@ -234,7 +261,10 @@ async function addHydrant(lat, lng) {
 }
 
 
+// ======================================
 // ИНФОРМАЦИЯ ЗА ХИДРАНТА
+// ======================================
+
 function hydrantPopup(h, index) {
 
     return `
@@ -247,7 +277,7 @@ function hydrantPopup(h, index) {
         <b>Дебит:</b> ${safeText(h.flow)} l/s<br>
         <b>Състояние:</b> ${safeText(h.status)}<br>
         <b>Последна проверка:</b> ${safeText(h.date)}<br>
-        <b>GPS:</b> ${h.lat.toFixed(6)}, ${h.lng.toFixed(6)}
+        <b>GPS:</b> ${Number(h.lat).toFixed(6)}, ${Number(h.lng).toFixed(6)}
         <hr>
         <button onclick="editHydrant(${index})">✏️ Редактирай</button>
         <button onclick="deleteHydrant(${index})">🗑️ Изтрий</button>
@@ -255,7 +285,10 @@ function hydrantPopup(h, index) {
 }
 
 
+// ======================================
 // ПОКАЗВАНЕ НА ХИДРАНТИТЕ
+// ======================================
+
 function showHydrants() {
 
     hydrantLayer.clearLayers();
@@ -272,10 +305,14 @@ function showHydrants() {
 }
 
 
+// ======================================
 // РЕДАКТИРАНЕ
+// ======================================
+
 async function editHydrant(index) {
 
     var h = hydrants[index];
+
     if (!h) return;
 
     var name = prompt("Номер на хидранта:", h.name);
@@ -288,8 +325,8 @@ async function editHydrant(index) {
     var status = prompt("Състояние:", h.status || "") || "";
     var date = prompt("Дата на проверка:", h.date || "") || "";
 
-    const { error } = await supabase
-        .from('hydrants')
+    const { error } = await supabaseClient
+        .from('Hydrants')
         .update({
             name: name.trim(),
             address: address,
@@ -312,7 +349,10 @@ async function editHydrant(index) {
 }
 
 
+// ======================================
 // ИЗТРИВАНЕ
+// ======================================
+
 async function deleteHydrant(index) {
 
     var h = hydrants[index];
@@ -321,8 +361,8 @@ async function deleteHydrant(index) {
 
     if (confirm("Сигурна ли си, че искаш да изтриеш този хидрант?")) {
 
-        const { error } = await supabase
-            .from('hydrants')
+        const { error } = await supabaseClient
+            .from('Hydrants')
             .delete()
             .eq('id', h.id);
 
@@ -338,7 +378,10 @@ async function deleteHydrant(index) {
 }
 
 
+// ======================================
 // ПОКАЗВАНЕ НА ВСИЧКИ ХИДРАНТИ
+// ======================================
+
 function showAllHydrants() {
 
     if (hydrants.length === 0) {
@@ -358,7 +401,12 @@ function showAllHydrants() {
 }
 
 
+// ======================================
 // GPS ПОЗИЦИОНИРАНЕ
+// ======================================
+
+var myLocationMarker = null;
+
 function findMyLocation() {
 
     if (!navigator.geolocation) {
@@ -375,7 +423,11 @@ function findMyLocation() {
 
             map.setView([lat, lng], 17);
 
-            L.marker([lat, lng], {
+            if (myLocationMarker) {
+                map.removeLayer(myLocationMarker);
+            }
+
+            myLocationMarker = L.marker([lat, lng], {
                 icon: personIcon
             })
             .addTo(map)
@@ -390,13 +442,19 @@ function findMyLocation() {
 }
 
 
+// ======================================
 // КЛИК ВЪРХУ КАРТАТА = ДОБАВЯНЕ
+// ======================================
+
 map.on('click', function(e) {
     addHydrant(e.latlng.lat, e.latlng.lng);
 });
 
 
-// ЗАРЕЖДАМЕ ВСИЧКИ ЗАПИСИ
+// ======================================
+// ЗАРЕЖДАНЕ ПРИ ОТВАРЯНЕ НА САЙТА
+// ======================================
+
 loadHydrants();
 
 </script>
