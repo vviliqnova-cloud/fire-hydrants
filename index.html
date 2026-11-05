@@ -61,6 +61,8 @@ button:hover { background: #8b0000; }
 }
 
 </style>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
@@ -85,6 +87,15 @@ button:hover { background: #8b0000; }
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
+
+// SUPABASE ВРЪЗКА
+const SUPABASE_URL = 'https://naafsfscdxsvbooiecus.supabase.co/rest/v1/';
+const SUPABASE_KEY = 'sb_publishable_k-TpCRFJnVdJcqNnVnMQrQ_1Rv61dnz';
+
+const supabase = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+);
 
 // КАРТА
 var map = L.map('map').setView([42.7339, 25.4858], 7);
@@ -138,9 +149,36 @@ var hydrantLayer = L.layerGroup().addTo(map);
 var hydrants = JSON.parse(localStorage.getItem('hydrants')) || [];
 
 
-// ЗАПАЗВАНЕ
-function saveHydrants() {
-    localStorage.setItem('hydrants', JSON.stringify(hydrants));
+// ЗАРЕЖДАНЕ НА ДАННИТЕ ОТ SUPABASE
+var hydrants = [];
+
+async function loadHydrants() {
+    const { data, error } = await supabase
+        .from('hydrants')
+        .select('*');
+
+    if (error) {
+        console.error('Грешка при зареждане:', error);
+        alert('Неуспешно зареждане на хидрантите!');
+        return;
+    }
+
+    hydrants = data.map(function(h) {
+        return {
+            id: h.id,
+            name: h.name,
+            address: h.address,
+            diameter: h.diameter,
+            pressure: h.pressure,
+            flow: h.flow,
+            status: h.status,
+            date: h.last_inspection,
+            lat: h.latitude,
+            lng: h.longitude
+        };
+    });
+
+    showHydrants();
 }
 
 
@@ -159,7 +197,7 @@ function safeText(value) {
 
 
 // ДОБАВЯНЕ НА ХИДРАНТ
-function addHydrant(lat, lng) {
+async function addHydrant(lat, lng) {
 
     var name = prompt("Номер или обозначение на хидранта:");
     if (!name || !name.trim()) return;
@@ -171,21 +209,28 @@ function addHydrant(lat, lng) {
     var status = prompt("Състояние (изправен / неизправен / неизвестен):") || "Неизвестно";
     var date = prompt("Дата на последна проверка:") || "";
 
-    hydrants.push({
-        id: Date.now(),
-        name: name.trim(),
-        address: address,
-        diameter: diameter,
-        pressure: pressure,
-        flow: flow,
-        status: status,
-        date: date,
-        lat: lat,
-        lng: lng
-    });
+    const { error } = await supabase
+        .from('hydrants')
+        .insert([{
+            name: name.trim(),
+            address: address,
+            diameter: diameter,
+            pressure: pressure,
+            flow: flow,
+            status: status,
+            last_inspection: date,
+            latitude: lat,
+            longitude: lng
+        }]);
 
-    saveHydrants();
-    showHydrants();
+    if (error) {
+        console.error(error);
+        alert("Грешка при добавяне на хидранта!");
+        return;
+    }
+
+    await loadHydrants();
+    alert("Хидрантът е добавен успешно!");
 }
 
 
@@ -228,37 +273,67 @@ function showHydrants() {
 
 
 // РЕДАКТИРАНЕ
-function editHydrant(index) {
+async function editHydrant(index) {
 
     var h = hydrants[index];
-
     if (!h) return;
 
     var name = prompt("Номер на хидранта:", h.name);
     if (!name || !name.trim()) return;
 
-    h.name = name.trim();
-    h.address = prompt("Адрес:", h.address || "") || "";
-    h.diameter = prompt("Диаметър:", h.diameter || "") || "";
-    h.pressure = prompt("Налягане (bar):", h.pressure || "") || "";
-    h.flow = prompt("Дебит (l/s):", h.flow || "") || "";
-    h.status = prompt("Състояние:", h.status || "") || "";
-    h.date = prompt("Дата на проверка:", h.date || "") || "";
+    var address = prompt("Адрес:", h.address || "") || "";
+    var diameter = prompt("Диаметър:", h.diameter || "") || "";
+    var pressure = prompt("Налягане (bar):", h.pressure || "") || "";
+    var flow = prompt("Дебит (l/s):", h.flow || "") || "";
+    var status = prompt("Състояние:", h.status || "") || "";
+    var date = prompt("Дата на проверка:", h.date || "") || "";
 
-    saveHydrants();
-    showHydrants();
+    const { error } = await supabase
+        .from('hydrants')
+        .update({
+            name: name.trim(),
+            address: address,
+            diameter: diameter,
+            pressure: pressure,
+            flow: flow,
+            status: status,
+            last_inspection: date
+        })
+        .eq('id', h.id);
+
+    if (error) {
+        console.error(error);
+        alert("Грешка при редактиране!");
+        return;
+    }
+
+    await loadHydrants();
+    alert("Хидрантът е редактиран успешно!");
 }
 
 
 // ИЗТРИВАНЕ
-function deleteHydrant(index) {
+async function deleteHydrant(index) {
+
+    var h = hydrants[index];
+
+    if (!h) return;
 
     if (confirm("Сигурна ли си, че искаш да изтриеш този хидрант?")) {
 
-        hydrants.splice(index, 1);
+        const { error } = await supabase
+            .from('hydrants')
+            .delete()
+            .eq('id', h.id);
 
-        saveHydrants();
-        showHydrants();
+        if (error) {
+            console.error(error);
+            alert("Грешка при изтриване!");
+            return;
+        }
+
+        await loadHydrants();
+        alert("Хидрантът е изтрит успешно!");
     }
 }
 
@@ -322,7 +397,7 @@ map.on('click', function(e) {
 
 
 // ЗАРЕЖДАМЕ ВСИЧКИ ЗАПИСИ
-showHydrants();
+loadHydrants();
 
 </script>
 
